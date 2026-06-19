@@ -1,101 +1,80 @@
-# Donis - Plataforma de Donaciones & Campañas
+# 📖 Guía de Ejecución y Documentación del Proyecto
 
-Este proyecto es una plataforma completa de gestión de campañas de donación y transferencias de fondos entre campañas, diseñada bajo el patrón de arquitectura **MVC (Modelo-Vista-Controlador)**. Cumple con los requerimientos técnicos y conceptuales de la cátedra de **Base de Datos II (UTN - F.R. Resistencia - Extensión Áulica Goya)**.
+Este proyecto es una plataforma completa de gestión de campañas de donación y transferencias atómicas de fondos, diseñada bajo el patrón de arquitectura **MVC (Modelo-Vista-Controlador)**. Está desarrollado con **React** para el frontend, **Node.js con Express** para la API, y **SQLite con Sequelize ORM** para el motor de base de datos.
 
----
-
-## 🛠️ Arquitectura y Tecnologías
-
-El sistema está dividido en dos partes principales:
-
-1. **Backend (API)**:
-   - **Framework**: Node.js con Express.
-   - **Base de Datos**: SQLite (SQL Relacional).
-   - **ORM**: Sequelize (para el mapeo objeto-relacional, control de transacciones y vistas).
-   - **Estructura**: Patrón MVC (Modelos en `backend/models`, Controladores en `backend/controllers`, Rutas en `backend/routes`).
-
-2. **Frontend (Cliente)**:
-   - **Framework**: React.js con Vite.
-   - **Alineación de Estilo**: CSS Nativo personalizado con estética premium (modo oscuro radial, glassmorphism, efectos de brillo pulsante en verde esmeralda y cian, animaciones sutiles y diseño totalmente responsivo).
-   - **Visualización**: Gráficos interactivos SVG nativos que comparan la meta de cada campaña frente a su balance actual en tiempo real.
+Cumple con todos los requerimientos técnicos y de base de datos de la cátedra de **Base de Datos II**.
 
 ---
 
-## 📊 Conceptos Clave de Bases de Datos Implementados
+## 🚀 Guía Rápida de Ejecución
 
-### 1. Vista de Totales por Campaña (`CampaignTotals`)
-Se creó una vista SQL (`VIEW`) en la base de datos para centralizar los cálculos y agregaciones por campaña. Sequelize consulta esta vista directamente como si fuese un modelo de solo lectura:
-```sql
-CREATE VIEW IF NOT EXISTS CampaignTotals AS
-SELECT 
-  c.id,
-  c.title,
-  c.targetAmount,
-  c.status,
-  c.createdAt,
-  c.updatedAt,
-  COALESCE(d.total_donations, 0) AS total_donations,
-  COALESCE(ts.total_sent, 0) AS total_transfers_sent,
-  COALESCE(tr.total_received, 0) AS total_transfers_received,
-  (COALESCE(d.total_donations, 0) - COALESCE(ts.total_sent, 0) + COALESCE(tr.total_received, 0)) AS current_balance,
-  COALESCE(d.donation_count, 0) AS donation_count
-FROM Campaigns c
-LEFT JOIN (
-  SELECT campaignId, SUM(amount) AS total_donations, COUNT(id) AS donation_count
-  FROM Donations
-  GROUP BY campaignId
-) d ON c.id = d.campaignId
-...
+Para iniciar todo el sistema con un solo comando, hemos creado el script automatizado **`start.sh`** en la raíz del proyecto.
+
+### Paso 1: Abrir la terminal
+Asegúrate de estar ubicado en la raíz del proyecto:
+```bash
+cd /home/lisandro/Documentos/BDD-Competencia
 ```
-* **Funciones Agregadas utilizadas**: `SUM()` para el total acumulado y `COUNT()` para contar la cantidad de donantes únicos.
-* **Mapeo ORM**: Definido en [CampaignTotals.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/CampaignTotals.js) y consultado por el controlador [campaignController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/campaignController.js).
 
-### 2. Transacciones SQL Atómicas para Transferencias
-Para cumplir con las propiedades **ACID** del motor de base de datos, la transferencia de dinero de una campaña origen a una campaña destino se realiza dentro de una **transacción SQL controlada**:
-* Se inicia una transacción de base de datos (`sequelize.transaction()`).
-* Se bloquea y valida el balance de la campaña de origen consultando la vista `CampaignTotals` dentro de la transacción.
-* Si el balance de origen es inferior al monto a transferir, la transacción se aborta (`t.rollback()`) y se retorna un error explicativo (evitando balances negativos e inconsistencias).
-* Si es correcto, se inserta el registro `Transfer` asociando el débito/crédito, y se confirma la transacción (`t.commit()`).
-* Implementado en: [transferController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/transferController.js).
+### Paso 2: Otorgar permisos de ejecución (solo la primera vez)
+Si es la primera vez que vas a usar el script, dale permisos de ejecución con:
+```bash
+chmod +x start.sh
+```
+
+### Paso 3: Iniciar el script
+Ejecuta el script:
+```bash
+./start.sh
+```
+
+Una vez ejecutado, verás en pantalla que se levantan ambos servidores de forma paralela. Abre tu navegador en:
+* 🌐 **Cliente React**: [http://localhost:5173](http://localhost:5173)
+* ⚙️ **Servidor API**: [http://localhost:5000](http://localhost:5000)
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🛠️ ¿Cómo funciona el script `start.sh`?
+
+El archivo [start.sh](file:///home/lisandro/Documentos/BDD-Competencia/start.sh) está diseñado en Bash para automatizar las tareas del desarrollador y del usuario final. Sus funciones clave son:
+
+1. **Limpieza de Puertos Ocupados**:
+   Antes de iniciar, ejecuta `fuser -k 5000/tcp` y `fuser -k 5173/tcp`. Esto apaga inmediatamente cualquier proceso colgado que haya quedado usando esos puertos en ejecuciones anteriores, evitando el clásico error *"Address already in use"*.
+2. **Ejecución Concurrente**:
+   Levanta en segundo plano (`&`) el servidor backend de Node.js en el puerto `5000` y el cliente React de Vite en el puerto `5173`.
+3. **Cierre Controlado (`Trap` de señales)**:
+   Utiliza la instrucción de Bash `trap cleanup SIGINT SIGTERM EXIT`. Al presionar **`Ctrl + C`** en la terminal, el script ejecuta una función que apaga de forma limpia y ordenada tanto el servidor de React como el de Express, asegurando que ningún puerto quede bloqueado tras cerrar la consola.
+4. **Sembrado Automático (Seed)**:
+   Al iniciar, el backend verifica si la base de datos SQLite tiene datos. Si está vacía, genera automáticamente campañas y transacciones de prueba para que la plataforma tenga datos visibles desde el primer segundo.
+
+---
+
+## 💾 Detalles del Motor de Base de Datos y Mapeo SQL
+
+### 1. Ubicación del archivo de la Base de Datos
+* La base de datos es un archivo físico local ubicado en:
+  `[raiz-proyecto]/backend/database.sqlite`
+* Puedes abrir este archivo directamente en **DBeaver** creando una conexión de tipo **SQLite** y seleccionando dicha ruta.
+
+### 2. Vista SQL Agregada: `CampaignTotals`
+* **Implementación**: Definida mediante código SQL puro e inicializada durante el inicio en [backend/models/index.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/index.js).
+* **Funcionalidad**: Utiliza funciones agregadas como `SUM(amount)` y `COUNT(id)` agrupadas por campaña para resolver el balance neto actual (`current_balance = total_donations - total_transfers_sent + total_transfers_received`) directamente en el motor de base de datos.
+* **Mapeo ORM**: Node.js utiliza el modelo de solo lectura [CampaignTotals.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/CampaignTotals.js) para hacer consultas directas a la vista mediante Sequelize.
+
+### 3. Transacciones SQL Atómicas (ACID)
+* Al realizar una transferencia de dinero de una campaña a otra (ej. en [backend/controllers/transferController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/transferController.js)), se ejecuta una **transacción SQL explícita**.
+* El sistema lee los saldos consolidados dentro de la transacción, verifica que la campaña de origen posea el monto disponible, realiza la operación y aplica un `commit`. Si falla la validación de fondos, la transacción ejecuta un `rollback` impidiendo inconsistencias en los balances.
+
+---
+
+## 📁 Estructura del Código Fuente
 
 * **`backend/`**:
-  * [server.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/server.js) — Punto de entrada de la API Express y sembrado de datos de prueba (`seeding`).
-  * `config/`
-    * [database.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/config/database.js) — Configuración del dialecto y base de datos SQLite.
-  * `models/`
-    * [index.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/index.js) — Asociaciones de modelos y creación automática de la vista SQL.
-    * [Campaign.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/Campaign.js) — Modelo de Campañas.
-    * [Donation.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/Donation.js) — Modelo de Donaciones.
-    * [Transfer.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/Transfer.js) — Modelo de Transferencias.
-    * [CampaignTotals.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/models/CampaignTotals.js) — Modelo de lectura para la vista SQL.
-  * `controllers/`
-    * [campaignController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/campaignController.js) — Operaciones de campaña y reportes.
-    * [donationController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/donationController.js) — Registro transaccional de donaciones.
-    * [transferController.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/controllers/transferController.js) — Transferencias atómicas transaccionales.
-  * `routes/` — Mapeo de endpoints de la API REST.
+  * [server.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/server.js) — Punto de entrada Express y alimentación de datos.
+  * [config/database.js](file:///home/lisandro/Documentos/BDD-Competencia/backend/config/database.js) — Conexión SQLite con Sequelize.
+  * `models/` — Modelos del ORM (Campaign, Donation, Transfer) y la vista agregada (CampaignTotals).
+  * `controllers/` — Controladores de negocio que resuelven las peticiones y transacciones.
+  * `routes/` — Definición de los endpoints de la API.
 * **`frontend/`**:
-  * [index.html](file:///home/lisandro/Documentos/BDD-Competencia/frontend/index.html) — Contenedor web con configuración de SEO y descripción.
-  * `src/`
-    * [App.jsx](file:///home/lisandro/Documentos/BDD-Competencia/frontend/src/App.jsx) — Aplicación cliente React con estado y modales.
-    * [index.css](file:///home/lisandro/Documentos/BDD-Competencia/frontend/src/index.css) — Hoja de estilos con variables de diseño CSS y glassmorphism.
-* **`start.sh`** — Script ejecutable bash para iniciar simultáneamente backend y frontend.
-
----
-
-## 🚀 Cómo Ejecutar el Proyecto
-
-Hemos creado un script que simplifica el inicio del sistema. Sigue estos pasos en tu terminal:
-
-1. Asegúrate de estar en el directorio raíz del proyecto: `/home/lisandro/Documentos/BDD-Competencia`.
-2. Ejecuta el script de inicio:
-   ```bash
-   ./start.sh
-   ```
-3. El script limpiará cualquier puerto en conflicto e iniciará de manera paralela:
-   * **El Backend (API)** en: `http://localhost:5000`
-   * **El Frontend (React)** en: `http://localhost:5173`
-4. Al abrir [http://localhost:5173](http://localhost:5173) en tu navegador, verás el sistema con datos de ejemplo ya cargados (Campañas de comedor comunitario, reconstrucción de escuela local con donaciones y una transferencia inicial) para que puedas interactuar con los gráficos y tablas de reportes inmediatamente.
+  * [src/App.jsx](file:///home/lisandro/Documentos/BDD-Competencia/frontend/src/App.jsx) — Interfaz de React, Dashboard interactivo con gráficos SVG y modales de operación.
+  * [src/index.css](file:///home/lisandro/Documentos/BDD-Competencia/frontend/src/index.css) — Estética modo oscuro con glassmorphism nativo.
