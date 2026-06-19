@@ -1,0 +1,112 @@
+ Aquí tienes un resumen cronológico detallado de todo el desarrollo del sistema, estructurado mediante las solicitudes (prompts)
+  que enviaste y las respuestas y acciones correspondientes, omitiendo por completo toda la interacción referida a GitHub y a los
+  scripts en Python:
+  ──────
+  ### 1. Requerimiento Inicial y Diseño del Sistema
+
+  • Tu Prompt:
+  │ "necesito crear un sistema completo que cumpla con estos requerimientos utilizando arquitectura mvc, react para el front y node
+  │ js con express para la api, utilizando tambien sql, en node el mapeo utilizando un orm..." (adjuntando una imagen con las bases
+  │ de la consigna).
+
+  • Mi Respuesta y Acciones:
+  Diseñé y construí la estructura de la Plataforma de Donaciones y Gestión de Campañas desde cero utilizando el patrón
+  arquitectónico MVC:
+      • Modelos (M): Creados con Sequelize ORM (usando SQLite por su portabilidad). Se definieron las tablas y relaciones para
+      campañas (Campaign.js), donaciones (Donation.js) y transferencias (Transfer.js).
+      • Controladores (C) y Rutas: Programados en Express para gestionar de manera aislada la lógica de negocio y las llamadas a la
+      base de datos.
+      • Vista (V): Diseñada en el frontend con React y Vite. Implementé una interfaz con estética premium en modo oscuro, paneles
+      con efecto traslúcido (glassmorphism), y gráficos de progreso dinámicos.
+
+  ──────
+  ### 2. Cumplimiento de Reglas Críticas de Base de Datos
+
+  • Tu Prompt:
+  │ "1. La Vista de Totales por Campaña. Lo que NO debes hacer: Traer todas las donaciones a Node.js con un Donation.findAll() y
+  usar
+  │ un .reduce() o un bucle... Cómo cumplir usando el ORM: Debes crear la vista directamente en tu base de datos (con el comando
+  │ CREATE VIEW)...
+  │ 2. Transacciones Estables para Transferencias. Lo que NO debes hacer: Hacer un Donation.create() para restar fondos y luego otro
+  │ Donation.create() para sumarlos de forma aislada... Cómo cumplir usando el ORM: Debes agrupar ambas operaciones dentro de una
+  │ transacción explícita..."
+
+  • Mi Respuesta y Acciones:
+  Revisé y verifiqué que el sistema cumpliera al 100% con estas dos restricciones técnicas:
+      • Vista SQL ( CampaignTotals ): Inyecté la vista física usando  CREATE VIEW  en el archivo de inicio index.js. Las
+      agregaciones de sumas ( SUM ) y conteos ( COUNT ) se delegan por completo al motor SQLite. Se mapeó al modelo pasivo de solo
+      lectura CampaignTotals.js.
+      • Transacciones ACID: En el controlador de transferencias se implementó una transacción explícita ( sequelize.transaction() ).
+      El sistema bloquea los registros dentro de la transacción, lee el balance en tiempo real a través de la vista SQL, valida si
+      hay saldo suficiente y, en caso positivo, registra el movimiento. Si algo falla o no hay saldo, ejecuta un  rollback
+      inmediato, asegurando que el dinero no se duplique ni desaparezca.
+
+  ──────
+  ### 3. Ubicación de la Base de Datos y Visualización
+
+  • Tu Prompt:
+  │ "donde esta la bd y como la veo desde dbeaver"
+
+  • Mi Respuesta y Acciones:
+      • Te indiqué la ruta del archivo físico de la base de datos: database.sqlite.
+      • Te di una guía paso a paso para abrirla en DBeaver: crear una nueva conexión del tipo SQLite, buscar la ruta del archivo
+      local y descargar el controlador necesario en la herramienta.
+
+  ──────
+  ### 4. Consultas SQL de Utilidad para DBeaver
+
+  • Tu Prompt:
+  │ "dame una consulta para ver los datos de donacioones"
+
+  • Mi Respuesta y Acciones:
+  Te entregué tres variantes de consultas SQL optimizadas para auditar la base de datos desde DBeaver:
+      • Básica: Un simple  SELECT * FROM Donations; .
+      • Detallada (con JOIN): Una consulta para listar todas las donaciones detalladas uniendo la tabla de Donaciones y Campañas,
+      obteniendo el nombre de la campaña de destino, montos, fecha legible y comentarios ordenados por fecha.
+      • Agregada: Un reporte que agrupa donaciones por campaña mostrando la cantidad recibida y la sumatoria total recaudada ( COUNT ,
+      SUM ,  LEFT JOIN  y  GROUP BY ).
+
+  ──────
+  ### 5. Concepto y Funcionamiento de SQLite
+
+  • Tu Prompt:
+  │ "database.sqlite cual es la funcionalidad de este archivo?"
+
+  • Mi Respuesta y Acciones:
+  Expliqué detalladamente la naturaleza de SQLite:
+      • Es una base de datos embebida en un solo archivo binario en disco.
+      • No necesita un servidor corriendo en segundo plano (como MySQL o Postgres).
+      • Contiene de manera autónoma toda la estructura DDL (tablas, vistas, claves foráneas) y la información del sistema,
+      garantizando portabilidad absoluta (basta con copiar el archivo para trasladar el sistema completo con sus datos).
+
+  ──────
+  ### 6. Script de Arranque y Limpieza
+
+  • Tu Prompt:
+  │ (Tras solicitar quitar implementaciones secundarias): "elimina eso... y pon un readme de guia de ejecucion y explique el uso del
+  │ start.sh"
+
+  • Mi Respuesta y Acciones:
+      • Creé y documenté el script start.sh que automatiza la ejecución.
+      • Este script se encarga de:
+          1. Liberar los puertos  5000  (Backend) y  5173  (Frontend Vite) matando cualquier proceso previo colgado.
+          2. Iniciar en segundo plano y en paralelo los servidores de Express y React.
+          3. Usar un manejador de señales ( trap ) para asegurar que al presionar  Ctrl + C  en la consola se cierren ambos procesos
+          a la vez, evitando que queden ejecutándose de fondo en Linux.
+      • Creé una guía en el archivo principal de instrucciones del sistema.
+
+  ──────
+  ### 7. Generación del Archivo de Documentación Técnica
+
+  • Tu Prompt:
+  │ "dame un .md de todo nuestro dialogo sin contar todo lo de github, el python y el ultimo .md de guia de ejecucion"
+
+  • Mi Respuesta y Acciones:
+  Generé el archivo documentacion_flujo_y_consultas.md en la raíz de tu proyecto, que funciona como bitácora técnica de desarrollo
+para evaluar el
+  proyecto. Contiene:
+      • Explicación de la arquitectura MVC del proyecto.
+      • Sentencia DDL completa de la vista SQL  CampaignTotals  y cómo la lee el backend.
+      • Detalle de la lógica de transacciones ACID para las transferencias de saldo.
+      • Las consultas SQL de utilidad preparadas para ejecutar en DBeaver.
+      • Explicación sobre el almacenamiento de SQLite.
