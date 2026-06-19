@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Archivos de Base de Datos locales (se auto-generan al iniciar la API)
+*.sqlite
+*.sqlite-journal
+
+# Variables de entorno
+.env
+
+# Builds e IDEs
+dist/
+.vscode/
+.idea/
+.DS_Store
