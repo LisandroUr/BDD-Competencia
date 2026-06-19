@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+import os
+import sqlite3
+import webbrowser
+import sys
+
+# Definir rutas
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'backend', 'database.sqlite')
+HTML_PATH = os.path.join(BASE_DIR, 'visualizar_datos.html')
+
+def check_db():
+    if not os.path.exists(DB_PATH):
+        print(f"ERROR: No se encontró el archivo de base de datos en: {DB_PATH}")
+        print("Por favor, inicia primero el backend ejecutando ./start.sh para crear y sembrar la base de datos.")
+        sys.exit(1)
+
+def query_db(query, params=()):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try {
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return rows
+    except Exception as e:
+        print(f"Error ejecutando query: {query}\nError: {e}")
+        return []
+    finally:
+        conn.close()
+
+def generate_html():
+    check_db()
+    
+    # 1. Obtener estructura/esquema de las tablas y vistas
+    schema_rows = query_db("SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%';")
+    
+    # 2. Obtener datos de la Vista de Totales por Campaña
+    totals_rows = query_db("SELECT * FROM CampaignTotals;")
+    
+    # 3. Obtener todas las donaciones detalladas
+    donations_rows = query_db("""
+        SELECT d.id, d.createdAt, d.donorName, d.amount, c.title AS campaign_title, d.comment 
+        FROM Donations d 
+        JOIN Campaigns c ON d.campaignId = c.id
+        ORDER BY d.createdAt DESC;
+    """)
+    
+    # 4. Obtener todas las transferencias detalladas
+    transfers_rows = query_db("""
+        SELECT t.id, t.createdAt, t.amount, t.reason, 
+               c1.title AS source_title, c2.title AS target_title
+        FROM Transfers t
+        JOIN Campaigns c1 ON t.sourceCampaignId = c1.id
+        JOIN Campaigns c2 ON t.targetCampaignId = c2.id
+        ORDER BY t.createdAt DESC;
+    """)
+
+    # Comenzar a construir el contenido HTML
+    html_content = """<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Base de Datos - Donis</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            margin: 0;
+            padding: 40px;
+            background-image: radial-gradient(circle at top right, rgba(6, 182, 212, 0.05), transparent 400px);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 20px;
+            margin-bottom: 32px;
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #06b6d4 0%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        p.subtitle {
+            color: #9ca3af;
+            margin: 8px 0 0 0;
+            font-size: 0.95rem;
+        }
+
+        .section-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        h2 {
+            font-size: 1.3rem;
+            color: #06b6d4;
+            margin-top: 0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.875rem;
+        }
+
+        th {
+            padding: 12px 16px;
+            background-color: rgba(255, 255, 255, 0.02);
+            color: #9ca3af;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-active {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        
+        .badge-paused {
+            background-color: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .text-green { color: #10b981; font-weight: 600; }
+        .text-orange { color: #f59e0b; font-weight: 600; }
+        .text-red { color: #ef4444; font-weight: 600; }
+        .text-bold { font-weight: 700; }
+
+        pre {
+            background-color: #111827;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 16px;
+            color: #a7f3d0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin: 0 0 16px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media(min-width: 768px) {
+            .grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Visualizador Estático de Datos y Estructura SQL</h1>
+            <p class="subtitle">Datos extraídos en tiempo real de: <code>backend/database.sqlite</code></p>
+        </header>
+
+        <!-- 1. VISTA DE TOTALES -->
+        <div class="section-card">
+            <h2>📊 Consulta a la Vista SQL: CampaignTotals</h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Campaña</th>
+                            <th>Estado</th>
+                            <th>Monto Meta</th>
+                            <th>Donado (+)</th>
+                            <th>Recibido (+)</th>
+                            <th>Enviado (-)</th>
+                            <th>Balance Neto</th>
+                            <th>Donantes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+"""
+
+    if not totals_rows:
+        html_content += "<tr><td colspan='9' style='text-align:center; color:#9ca3af;'>No hay campañas registradas.</td></tr>"
+    else:
+        for row in totals_rows:
+            status_badge = f"<span class='badge badge-active'>{row['status']}</span>" if row['status'] == 'active' else f"<span class='badge badge-paused'>{row['status']}</span>"
+            html_content += f"""
+                        <tr>
+                            <td>{row['id']}</td>
+                            <td class='text-bold'>{row['title']}</td>
+                            <td>{status_badge}</td>
+                            <td>${row['targetAmount']:.2f}</td>
+                            <td class='text-green'>+${row['total_donations']:.2f}</td>
+                            <td class='text-green'>+${row['total_transfers_received']:.2f}</td>
+                            <td class='text-red'>-${row['total_transfers_sent']:.2f}</td>
+                            <td class='text-bold' style='color:#06b6d4'>${row['current_balance']:.2f}</td>
+                            <td>{row['donation_count']}</td>
+                        </tr>"""
+
+    html_content += """
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- 2. DONACIONES -->
+            <div class="section-card">
+                <h2>💰 Historial de Donaciones</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Donante</th>
+                                <th>Monto</th>
+                                <th>Campaña</th>
+                                <th>Comentario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+"""
+
+    if not donations_rows:
+        html_content += "<tr><td colspan='4' style='text-align:center; color:#9ca3af;'>No hay donaciones registradas.</td></tr>"
+    else:
+        for row in donations_rows:
+            html_content += f"""
+                            <tr>
+                                <td>{row['donorName']}</td>
+                                <td class='text-green'>+${row['amount']:.2f}</td>
+                                <td class='text-bold'>{row['campaign_title']}</td>
+                                <td style='color:#9ca3af; font-size:0.8rem;'>{row['comment'] if row['comment'] else 'Sin comentarios'}</td>
+                            </tr>"""
+
+    html_content += """
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 3. TRANSFERENCIAS -->
+            <div class="section-card">
+                <h2>🔄 Historial de Transferencias Atómicas</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th>Monto</th>
+                                <th>Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+"""
+
+    if not transfers_rows:
+        html_content += "<tr><td colspan='4' style='text-align:center; color:#9ca3af;'>No hay transferencias registradas.</td></tr>"
+    else:
+        for row in transfers_rows:
+            html_content += f"""
+                            <tr>
+                                <td class='text-red'>{row['source_title']}</td>
+                                <td class='text-green'>{row['target_title']}</td>
+                                <td class='text-orange'>${row['amount']:.2f}</td>
+                                <td style='color:#9ca3af; font-size:0.8rem;'>{row['reason']}</td>
+                            </tr>"""
+
+    html_content += """
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. ESTRUCTURA Y DDL -->
+        <div class="section-card">
+            <h2>📐 Estructura de la Base de Datos (Esquema DDL)</h2>
+            <div style="display:flex; flex-direction:column; gap:16px;">
+"""
+
+    for item in schema_rows:
+        type_lbl = "TABLA" if item['type'] == 'table' else "VISTA"
+        html_content += f"""
+                <div>
+                    <h3 style='margin:0 0 8px 0; font-size:0.95rem; color:#10b981;'>{type_lbl}: {item['name']}</h3>
+                    <pre>{item['sql']};</pre>
+                </div>"""
+
+    html_content += """
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+    # Guardar en archivo html
+    with open(HTML_PATH, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    
+    print(f"Reporte generado exitosamente en: {HTML_PATH}")
+    
+    # Abrir en el navegador por defecto
+    webbrowser.open(f"file://{HTML_PATH}")
+
+if __name__ == '__main__':
+    generate_html()
