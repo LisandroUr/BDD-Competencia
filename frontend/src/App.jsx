@@ -16,13 +16,15 @@ import {
   Calendar,
   User,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  Menu
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
   const [totals, setTotals] = useState([]);
   const [donations, setDonations] = useState([]);
@@ -221,37 +223,45 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* Sidebar Backdrop Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
           <HeartHandshake className="sidebar-logo-icon" size={28} color="#06b6d4" />
           <h1 className="sidebar-logo">Donis Manager</h1>
+          <button className="sidebar-close-btn" onClick={() => setIsSidebarOpen(false)} aria-label="Cerrar menú">
+            <X size={20} />
+          </button>
         </div>
         <ul className="sidebar-menu">
           <li 
             className={`sidebar-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
           >
             <LayoutDashboard size={20} />
             <span>Dashboard</span>
           </li>
           <li 
             className={`sidebar-item ${activeTab === 'campaigns' ? 'active' : ''}`}
-            onClick={() => setActiveTab('campaigns')}
+            onClick={() => { setActiveTab('campaigns'); setIsSidebarOpen(false); }}
           >
             <HeartHandshake size={20} />
             <span>Campañas</span>
           </li>
           <li 
             className={`sidebar-item ${activeTab === 'donations' ? 'active' : ''}`}
-            onClick={() => setActiveTab('donations')}
+            onClick={() => { setActiveTab('donations'); setIsSidebarOpen(false); }}
           >
             <ClipboardList size={20} />
             <span>Donaciones</span>
           </li>
           <li 
             className={`sidebar-item ${activeTab === 'transfers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('transfers')}
+            onClick={() => { setActiveTab('transfers'); setIsSidebarOpen(false); }}
           >
             <ArrowLeftRight size={20} />
             <span>Transferencias</span>
@@ -269,6 +279,17 @@ function App() {
 
       {/* Main Content Area */}
       <main className="main-content">
+        {/* Mobile Header (only visible on mobile screens) */}
+        <div className="mobile-header">
+          <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menú">
+            <Menu size={24} />
+          </button>
+          <div className="mobile-logo-container">
+            <HeartHandshake size={22} color="#06b6d4" />
+            <span className="mobile-logo-text">Donis Manager</span>
+          </div>
+        </div>
+
         {/* Alerts / Toasts */}
         {error && (
           <div className="alert alert-danger animate-fade-in">
@@ -307,7 +328,7 @@ function App() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="content-header-actions">
             {activeTab === 'campaigns' && (
               <button className="btn-primary" onClick={() => setIsCreateCampaignModalOpen(true)}>
                 <Plus size={18} />
@@ -418,11 +439,11 @@ function App() {
                         const target = parseFloat(item.targetAmount);
                         const percent = Math.min((balance / target) * 100, 100);
                         return (
-                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <div style={{ width: '200px', fontSize: '0.85rem', fontWeight: 600, color: '#f3f4f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.title}>
+                          <div key={item.id} className="chart-item">
+                            <div className="chart-item-title" title={item.title}>
                               {item.title}
                             </div>
-                            <div style={{ flex: 1 }}>
+                            <div className="chart-item-bar-container">
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '4px' }}>
                                 <span>Balance: <strong>${balance.toLocaleString('es-AR')}</strong></span>
                                 <span>Meta: <strong>${target.toLocaleString('es-AR')}</strong></span>
@@ -438,7 +459,7 @@ function App() {
                                 ></div>
                               </div>
                             </div>
-                            <div style={{ width: '60px', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, color: balance >= target ? '#10b981' : '#06b6d4' }}>
+                            <div className="chart-item-percent" style={{ color: balance >= target ? '#10b981' : '#06b6d4' }}>
                               {((balance / target) * 100).toFixed(0)}%
                             </div>
                           </div>
@@ -450,21 +471,20 @@ function App() {
 
                 {/* Campaign Totals Report Table (FROM SQL VIEW) */}
                 <div className="glass-panel report-section">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div className="report-header-flex">
                     <div>
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Reporte: Vista de Totales por Campaña</h3>
                       <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '2px' }}>Consulta de base de datos directa a la Vista SQL <code style={{ color: '#06b6d4' }}>CampaignTotals</code></p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div className="report-filters">
                       {/* Search */}
-                      <div style={{ position: 'relative' }}>
+                      <div className="search-input-container">
                         <Search style={{ position: 'absolute', left: '12px', top: '10px', color: '#4b5563' }} size={16} />
                         <input 
                           type="text" 
                           placeholder="Buscar campaña..." 
-                          className="form-input" 
-                          style={{ paddingLeft: '36px', height: '36px', fontSize: '0.85rem', width: '200px' }}
+                          className="form-input search-input" 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -472,8 +492,7 @@ function App() {
                       
                       {/* Dropdown status */}
                       <select 
-                        className="form-select" 
-                        style={{ height: '36px', padding: '0 32px 0 12px', fontSize: '0.85rem', width: '120px' }}
+                        className="form-select status-select" 
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                       >
